@@ -1,27 +1,11 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include <stdlib.h>
-#include <time.h>
 #include <string.h>
 
-#include "credentials.h"
 #include "types.h"
+#include "globals.h"
 
-WiFiClient wifi_client;
-PubSubClient client(wifi_client);
-
-// networking
-const char *ssid = SECRET_SSID;
-const char *pass = SECRET_PASS;
-const char *mqtt_broker = GCP_ADDRESS;
-const int mqtt_port = 1883; 
-
-// data pipeline
-const char* move_channel = "ttt/moves";  // import player actions
-const char* auth_channel_o = "ttt/auth/o"; // export if o's move was valid or not
-const char* auth_channel_x = "ttt/auth/x"; // export if x's move was valid or not
-const char* status_channel = "ttt/board/status"; // export game status
-const char* display_channel = "ttt/board/display";  // export board state
+Game* game_ptr = (Game *) malloc(sizeof(Game));
 
 // ready up
 int client_ready_o = 0;
@@ -32,59 +16,6 @@ int games_played = 0;
 int games_o_won = 0;
 int games_x_won = 0;
 int games_drawn = 0;
-
-Game* game_ptr = (Game *) malloc(sizeof(Game));
-
-void setup_wifi_client()
-{
-	// Connect to WiFi
-	WiFi.mode(WIFI_STA);
-	WiFi.disconnect();
-	delay(500);
-	WiFi.begin(ssid, pass);
-	Serial.println("Connecting to WiFi..");
-	while (WiFi.status() != WL_CONNECTED) {
-		delay(20);
-		Serial.print(".");
-	}
-
-	// Print connection info
-	Serial.println("\nWiFi connected");
-	Serial.print("SSID: ");
-	Serial.println(WiFi.SSID());
-	Serial.print("IP address: ");
-	Serial.println(WiFi.localIP());
-}
-
-void setup_mqtt_client()
-{
-	client.setServer(mqtt_broker, mqtt_port);
-	client.setCallback(callback);
-
-	String client_id = "esp32-client-" + WiFi.macAddress();
-
-	Serial.println("Connecting to MQTT broker..");
-	while(!client.connected()) {
-		delay(500);
-		Serial.print(".");
-		if (client.connect(client_id.c_str()))
-		{
-			Serial.println("\nMQTT client \""+ String(client_id) +"\"");
-			Serial.println("Connected to "+ String(mqtt_broker) +" on port "+ String(mqtt_port));
-		} 
-		else 
-		{
-				Serial.print("\nAttempt failed with state ");
-				Serial.println(client.state());
-				delay(2000);
-		}
-	}
-
-	if (client.subscribe(move_channel))
-		Serial.println("Subscribed to topic \""+ String(move_channel) +"\"");
-	else
-		Serial.println("Failed to subscribe to topic");
-}
 
 // executes when a player acts
 void callback(char* topic, byte* payload, unsigned int length)
@@ -112,10 +43,16 @@ void callback(char* topic, byte* payload, unsigned int length)
     {
       char first_player = get_first_player();
       new_game(game_ptr, first_player);
+
+      delay(1000);
+      publish_board();
+      delay(500);
+
       if (game_ptr->current_player == 'O')
         client.publish(status_channel, "TURN_O");
-      else
+      else client.publish(status_channel, "TURN_X");
         client.publish(status_channel, "TURN_X");
+
       client_ready_o = 0;
       client_ready_x = 0;
     }
@@ -126,7 +63,9 @@ void callback(char* topic, byte* payload, unsigned int length)
     int y = ((int) turn_data[2]) - 48;
     GameStatus current_status = add_to_board(turn_data[0], x, y, game_ptr);
   
-    delay(2);
+    delay(1000);
+    publish_board();
+    delay(250);
     switch (current_status)
     {
       case GAME_ILLEGAL_TURN:
@@ -156,7 +95,11 @@ void callback(char* topic, byte* payload, unsigned int length)
           client.publish(auth_channel_x, "OK");
         else
           client.publish(auth_channel_o, "OK");
+
         client.publish(status_channel, "VICTORY_O");
+        delay(250);
+        publish_board();
+
         games_o_won++;
         games_played++;
         delay(2);
@@ -168,7 +111,11 @@ void callback(char* topic, byte* payload, unsigned int length)
           client.publish(auth_channel_x, "OK");
         else
           client.publish(auth_channel_o, "OK");    
+
         client.publish(status_channel, "VICTORY_X");
+        delay(250);
+        publish_board();
+
         games_x_won++;
         games_played++;
         delay(2);
@@ -181,7 +128,11 @@ void callback(char* topic, byte* payload, unsigned int length)
         else
           client.publish(auth_channel_o, "OK");
         delay(6);
+
         client.publish(status_channel, "DRAW");
+        delay(250);
+        publish_board();
+
         games_drawn++;
         games_played++;
         delay(2);
@@ -197,6 +148,25 @@ char get_first_player()
     return 'O';
   else
     return 'X';
+}
+
+void publish_board() {
+  char board_state[32] = "";
+  for (int i = 0; i < 3; i++)
+  {
+    for (int j = 0; j < 3; j++)
+    {
+      if (game_ptr->cells[i][j] == 'O')
+       strcat(board_state, "O");
+      else if (game_ptr->cells[i][j] == 'X')
+       strcat(board_state, "X");
+      else
+       strcat(board_state, "_");
+
+    }
+    strcat(board_state, "\n");
+  }
+  client.publish(display_channel, board_state);
 }
 
 void setup()

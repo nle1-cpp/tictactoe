@@ -3,10 +3,10 @@
 
 typedef struct
 {
-  char cells[3][3];
-  char current_player;
-  int current_turn;
-  int is_running;
+	char cells[3][3];
+	char current_player;
+	int current_turn;
+	int is_running;
 } Game;
 
 typedef enum {
@@ -14,7 +14,7 @@ typedef enum {
 	GAME_CONTINUE = 0,
 	GAME_VICTORY_O = 1,
 	GAME_VICTORY_X = 2,
-  GAME_DRAW = 3
+	GAME_DRAW = 3
 } GameStatus;
 
 #endif
