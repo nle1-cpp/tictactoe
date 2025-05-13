@@ -8,7 +8,7 @@
 #include <mosquitto.h>
 
 #include "player.h"
-#include "../../server/credentials.h"
+#include "../../credentials.h"
 
 struct mosquitto *mosq;
 
