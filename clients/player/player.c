@@ -8,16 +8,15 @@
 #include <mosquitto.h>
 
 #include "player.h"
+#include "../../server/credentials.h"
 
 struct mosquitto *mosq;
 
 char player_assignment;
-char *hostname = "34.169.220.30";
+char *hostname = GCP_ADDRESS;
 
 char *display_channel = "ttt/board/display"; 
-char *mode_channel = "ttt/";
-char *auth_channel = "ttt/auth/";
-char *bot_start_channel;
+char *bot_start_channel = "ttt/bots";
 
 char cmd[128];
 char turn_data[4] = "";
@@ -53,8 +52,10 @@ char *get_next_message(struct mosquitto *mosq, const char *topic) {
 
 	// Wait for one message
 	while (!is_msg_received) {
-		mosquitto_loop(mosq, 1000, 1);
+		// pause program until message received
 	}
+
+	is_msg_received = 0;
 
 	// printf("From topic: %s\n", topic);
 	// printf("Received payload: %s\n", received_msg);
@@ -66,14 +67,13 @@ char *get_next_message(struct mosquitto *mosq, const char *topic) {
 
 int main()
 {	
-	printf("\033[2J\033[H");	// clears terminal screen
+	// printf("\033[2J\033[H");	// clears terminal screen
 
 	setvbuf(stdout, NULL, _IONBF, 0);
 	srand(time(NULL));
 
 	// init mqtt
 	mosquitto_lib_init();
-	mosquitto_loop_start(mosq);
 	mosq = mosquitto_new(NULL, true, NULL);
 
 	mosquitto_connect_callback_set(mosq, on_connect);
@@ -88,8 +88,9 @@ int main()
 			sleep(2);
 		}
 	} while (rc != 0);
-	// end init
 
+	mosquitto_loop_start(mosq);
+	// end init	
 
 	// Print menu:
 	printf("Menu:\n");
@@ -104,6 +105,8 @@ int main()
 	{
 		mode_selection = getchar();
 		getchar(); // consume newline
+		
+		printf("\n\n");
 
 		char *message;
 		switch (mode_selection)
@@ -111,39 +114,14 @@ int main()
 			case '1': 
 			{
 				pvp_play();
-
-				// printf("\033[2J\033[H");	// clears terminal screen
-				// 	
-				// // sends a unique string into assignment channel
-				// // only used for player vs player
-				// message = get_client_id(32);
-				// snprintf(cmd, 128, "mosquitto_pub -h %s -t %s -m %s", hostname, "ttt/assignment", message);
-				// system(cmd);
-				//
-				// // recieves player assignment through private channel named after unique string
-				// snprintf(cmd, 128, "mosquitto_sub -h %s -t %s", hostname, message);
-				// FILE *cmd_exec = popen(cmd, "r");
-				//
-				// char cmd_output[128];
-				// if (fgets(cmd_output, sizeof(cmd_output), cmd_exec) != NULL)
-				// 	if (cmd_output[0] == 'O')
-				// 		player_assignment = 'O';
-				// 	else
-				// 		player_assignment = 'X';
-				// pclose(cmd_exec);
-				//
-				// pvp_play();
-
 				valid_mode = 1;
 				break;
 			}
 			case '2':
 			{
 				// always o
-				valid_mode = 1;
-
 				pvai_play();
-
+				valid_mode = 1;
 				break;
 			}
 			case '3':
@@ -151,7 +129,6 @@ int main()
 				// printf("\033[2J\033[H");	// clears terminal screen
 
 				autoplay();
-
 				valid_mode = 1;
 				break;
 			}
@@ -165,6 +142,7 @@ int main()
 
 
 	// terminate mqtt 
+	mosquitto_loop_stop(mosq, true);
 	mosquitto_disconnect(mosq);
 	mosquitto_destroy(mosq);
 	mosquitto_lib_cleanup();
@@ -184,6 +162,7 @@ void pvp_play()
 	char* opp_turn_id;
 	char* victory_id;
 	char* defeat_id;
+	char* auth_channel;
 	if (player_assignment == 'O')
 	{
 		auth_channel = "ttt/auth/o";
@@ -225,8 +204,6 @@ void pvp_play()
 				printf("It is your opponent's turn.\n\n");
 			else
 			{
-				print_board();
-
 				if (strcmp(game_status, victory_id) == 0)
 					printf("You have won the game.");
 				else if (strcmp(game_status, defeat_id) == 0)
@@ -240,7 +217,7 @@ void pvp_play()
 			}
 
 			free(game_status);		
-		} while (is_turn == 0);
+		} while (is_turn == 0 && is_game_over == 0);
 
 		if (is_game_over != 0)
 			break;
@@ -308,8 +285,6 @@ void pvai_play()
 				printf("It is your opponent's turn.\n\n");
 			else
 			{
-				print_board();
-
 				if (strcmp(game_status, "VICTORY_O") == 0)
 					printf("You have won the game.");
 				else if (strcmp(game_status, "VICTORY_X") == 0)
@@ -323,7 +298,8 @@ void pvai_play()
 			}
 
 			free(game_status);		
-		} while (is_turn == 0);
+
+		} while (is_turn == 0 && is_game_over == 0);
 
 		if (is_game_over != 0)
 			break;
@@ -379,8 +355,6 @@ void autoplay()
 			printf("It is Player X's turn.\n\n");
 		else
 		{
-			print_board();
-
 			if (strcmp(game_status, "VICTORY_O") == 0)
 				printf("Player O has won the game.");
 			else if (strcmp(game_status, "VICTORY_X") == 0)
@@ -407,18 +381,11 @@ void print_board()
 	printf("\n");
 	printf("%s", board_display);
 	printf("\n");
-	// snprintf(cmd, 128, "mosquitto_sub -h %s -t %s -C 1", hostname, display_channel);
-	// FILE *cmd_exec = popen(cmd, "r");
-	//
-	// char cmd_output[128];
-	// if (fgets(cmd_output, sizeof(cmd_output), cmd_exec) != NULL)
-	// 	printf("%s", cmd_output);
-	//
-	// pclose(cmd_exec);
-	//
+
 	free(board_display);
 }
 
+// For determining player assignment server-side (unimplemented)
 char *get_client_id(int length) 
 {
     // Seed the random number generator with the current time

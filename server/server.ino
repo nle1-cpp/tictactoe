@@ -50,7 +50,7 @@ void callback(char* topic, byte* payload, unsigned int length)
 
       if (game_ptr->current_player == 'O')
         client.publish(status_channel, "TURN_O");
-      else client.publish(status_channel, "TURN_X");
+      else
         client.publish(status_channel, "TURN_X");
 
       client_ready_o = 0;
@@ -64,8 +64,6 @@ void callback(char* topic, byte* payload, unsigned int length)
     GameStatus current_status = add_to_board(turn_data[0], x, y, game_ptr);
   
     delay(1000);
-    publish_board();
-    delay(250);
     switch (current_status)
     {
       case GAME_ILLEGAL_TURN:
@@ -76,15 +74,20 @@ void callback(char* topic, byte* payload, unsigned int length)
         break;
 
       case GAME_CONTINUE:
-        delay(6);
         if (game_ptr->current_player == 'O') // current player is actually next as alt_player is called in add_to_board
         {
           client.publish(auth_channel_x, "OK");
+          delay(500);
+          publish_board();
+          delay(500);
           client.publish(status_channel, "TURN_O");
         }
         else
         {
           client.publish(auth_channel_o, "OK");
+          delay(500);
+          publish_board();
+          delay(500);
           client.publish(status_channel, "TURN_X");
         }
         break;
@@ -96,9 +99,14 @@ void callback(char* topic, byte* payload, unsigned int length)
         else
           client.publish(auth_channel_o, "OK");
 
-        client.publish(status_channel, "VICTORY_O");
-        delay(250);
+        delay(500);
         publish_board();
+        delay(500);
+        client.publish(status_channel, "VICTORY_O");
+        delay(500);
+        publish_board();
+        delay(500);
+        client.publish(status_channel, "VICTORY_O");
 
         games_o_won++;
         games_played++;
@@ -112,9 +120,14 @@ void callback(char* topic, byte* payload, unsigned int length)
         else
           client.publish(auth_channel_o, "OK");    
 
-        client.publish(status_channel, "VICTORY_X");
-        delay(250);
+        delay(500);
         publish_board();
+        delay(500);
+        client.publish(status_channel, "VICTORY_X");
+        delay(500);
+        publish_board();
+        delay(500);
+        client.publish(status_channel, "VICTORY_X");
 
         games_x_won++;
         games_played++;
@@ -129,9 +142,14 @@ void callback(char* topic, byte* payload, unsigned int length)
           client.publish(auth_channel_o, "OK");
         delay(6);
 
-        client.publish(status_channel, "DRAW");
-        delay(250);
+        delay(500);
         publish_board();
+        delay(500);
+        client.publish(status_channel, "DRAW");
+        delay(500);
+        publish_board();
+        delay(500);
+        client.publish(status_channel, "DRAW");
 
         games_drawn++;
         games_played++;

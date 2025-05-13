@@ -5,7 +5,6 @@ void pvp_play();
 void pvai_play();
 void autoplay();
 void print_board();
-void print_game_over(char* str);
 char* get_client_id(int length);
 
 #endif
